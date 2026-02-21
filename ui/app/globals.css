@@ -1,0 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500&display=swap');
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0f0f0f;
+  --surface:   #1a1a1a;
+  --surface2:  #222222;
+  --border:    #2e2e2e;
+  --border2:   #3a3a3a;
+  --text:      #f0f0f0;
+  --text2:     #a0a0a0;
+  --text3:     #606060;
+  --green:     #16c784;
+  --green-bg:  rgba(22,199,132,0.1);
+  --red:       #ea3943;
+  --red-bg:    rgba(234,57,67,0.1);
+  --blue:      #3b82f6;
+  --yellow:    #f59e0b;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Geist', -apple-system, sans-serif;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+.mono { font-family: 'Geist Mono', monospace; }
+
+input[type=number]::-webkit-inner-spin-button,
+input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  font-weight: 500; border-radius: 8px; cursor: pointer;
+  transition: all 0.15s ease; border: none; font-family: inherit;
+}
+.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+}
