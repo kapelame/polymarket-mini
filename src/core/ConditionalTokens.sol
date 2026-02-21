@@ -325,6 +325,10 @@ contract ConditionalTokens is ERC1155 {
         return CTHelpers.getPositionId(collateralToken, collectionId);
     }
 
+    function getPayouts(bytes32 conditionId) external view returns (uint256[] memory) {
+        return payoutNumerators[conditionId];
+    }
+
     function getOutcomeSlotCount(bytes32 conditionId) external view returns (uint) {
         return payoutNumerators[conditionId].length;
     }

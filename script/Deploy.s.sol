@@ -5,28 +5,29 @@ import "forge-std/Script.sol";
 import "../src/core/MockUSDC.sol";
 import "../src/core/ConditionalTokens.sol";
 import "../src/exchange/CTFExchange.sol";
+import "../src/oracle/OptimisticOracle.sol";
 
 contract Deploy is Script {
     function run() external {
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
-        address deployer    = vm.addr(deployerKey);
         address operator    = vm.envAddress("OPERATOR_ADDRESS");
+        address deployer    = vm.addr(deployerKey);
 
         vm.startBroadcast(deployerKey);
 
-        MockUSDC usdc = new MockUSDC();
-        console.log("USDC:    ", address(usdc));
+        MockUSDC          usdc     = new MockUSDC();
+        ConditionalTokens ctf      = new ConditionalTokens();
+        CTFExchange       exchange = new CTFExchange(address(usdc), address(ctf), operator);
+        OptimisticOracle  oracle   = new OptimisticOracle(address(usdc), address(ctf), operator);
 
-        ConditionalTokens ctf = new ConditionalTokens();
-        console.log("CTF:     ", address(ctf));
-
-        CTFExchange exchange = new CTFExchange(address(usdc), address(ctf), operator);
-        console.log("Exchange:", address(exchange));
-
-        // Mint 10,000 USDC to deployer for testing
-        usdc.mint(deployer, 10_000e6);
-        console.log("Minted 10000 USDC to deployer:", deployer);
+        usdc.mint(deployer, 100_000e6);
+        usdc.mint(operator, 10_000e6);  // operator needs bond USDC
 
         vm.stopBroadcast();
+
+        console.log("USDC:     ", address(usdc));
+        console.log("CTF:      ", address(ctf));
+        console.log("Exchange: ", address(exchange));
+        console.log("Oracle:   ", address(oracle));
     }
 }
