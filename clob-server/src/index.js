@@ -91,3 +91,44 @@ server.listen(PORT, () => {
     console.log(`CLOB server on port ${PORT}`);
     engine.start(500);
 });
+
+// ── Dynamic market creation (appended) ─────────────────────────────
+const { MarketFactory } = require("./chain/MarketFactory");
+
+const factory = new MarketFactory(RPC_URL, OPERATOR_KEY, {
+    ctfAddress:      process.env.CTF_ADDRESS      || "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+    oracleAddress:   ORACLE_ADDR || "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9",
+    exchangeAddress: EXCHANGE_ADDR,
+    usdcAddress:     USDC_ADDR,
+});
+
+app.post("/market/create/btc", async (req, res) => {
+    try {
+        const duration = parseInt(req.body.duration || "300"); // seconds
+        if (duration < 60 || duration > 3600)
+            return res.status(400).json({ error: "duration must be 60-3600 seconds" });
+
+        const market = await factory.createBtcMarket(duration);
+
+        // Add to live orderbooks
+        books.set(market.yesToken, new (require("./orderbook/OrderBook").OrderBook)(market.yesToken));
+        books.set(market.noToken,  new (require("./orderbook/OrderBook").OrderBook)(market.noToken));
+        engine.registerPair(market.yesToken, market.noToken);
+
+        console.log(`New market added to engine: ${market.question.slice(0,50)}...`);
+        res.json(market);
+    } catch (e) {
+        console.error("Market creation failed:", e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
+
+app.get("/market/list", (req, res) => {
+    res.json(factory.getMarkets());
+});
+
+app.get("/market/:questionId", (req, res) => {
+    const m = factory.getMarket(req.params.questionId);
+    if (!m) return res.status(404).json({ error: "Market not found" });
+    res.json(m);
+});
