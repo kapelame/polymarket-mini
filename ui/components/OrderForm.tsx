@@ -15,8 +15,11 @@ type Token = "YES" | "NO";
 
 const STEPS = ["Authenticating", "Signing order", "Registering on-chain", "Posting to CLOB"];
 
-export default function OrderForm() {
+interface OFProps { yesToken?: string; noToken?: string; question?: string; }
+export default function OrderForm({ yesToken: _yesToken, noToken: _noToken, question }: OFProps) {
   const { address } = useAccount();
+  const YES_TK = _yesToken || YES_TOKEN;
+  const NO_TK  = _noToken  || NO_TOKEN;
   const [side,    setSide]    = useState<Side>("BUY");
   const [token,   setToken]   = useState<Token>("YES");
   const [price,   setPrice]   = useState("0.60");
@@ -25,7 +28,7 @@ export default function OrderForm() {
   const [step,    setStep]    = useState<number>(-1);
   const [loading, setLoading] = useState(false);
 
-  const tokenId = token === "YES" ? YES_TOKEN : NO_TOKEN;
+  const tokenId = token === "YES" ? YES_TK : NO_TK;
 
   const { data: usdcBal } = useReadContract({
     address: USDC_ADDRESS, abi: USDC_ABI, functionName: "balanceOf",
@@ -33,12 +36,12 @@ export default function OrderForm() {
   });
   const { data: yesBal } = useReadContract({
     address: CTF_ADDRESS, abi: CTF_ABI, functionName: "balanceOf",
-    args: address ? [address, BigInt(YES_TOKEN)] : undefined,
+    args: address ? [address, BigInt(YES_TK)] : undefined,
     query: { enabled: !!address, refetchInterval: 3000 },
   });
   const { data: noBal } = useReadContract({
     address: CTF_ADDRESS, abi: CTF_ABI, functionName: "balanceOf",
-    args: address ? [address, BigInt(NO_TOKEN)] : undefined,
+    args: address ? [address, BigInt(NO_TK)] : undefined,
     query: { enabled: !!address, refetchInterval: 3000 },
   });
   const { data: usdcAllowance } = useReadContract({

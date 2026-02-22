@@ -8,7 +8,7 @@ interface Fill {
   size:  string;
 }
 
-export default function TradeHistory() {
+export default function TradeHistory({ yesToken }: { yesToken?: string }) {
   const [fills, setFills] = useState<Fill[]>([]);
   const ws = useRef<WebSocket | null>(null);
 

@@ -60,4 +60,21 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_trades_time  ON trades(created_at DESC);
 `);
 
+db.exec(`
+  CREATE TABLE IF NOT EXISTS pending_markets (
+    id            TEXT PRIMARY KEY,
+    creator       TEXT NOT NULL,
+    type          TEXT NOT NULL DEFAULT 'CUSTOM',
+    question      TEXT NOT NULL,
+    description   TEXT,
+    category      TEXT NOT NULL DEFAULT 'crypto',
+    duration      INTEGER NOT NULL DEFAULT 86400,
+    status        TEXT NOT NULL DEFAULT 'PENDING',
+    created_at    INTEGER DEFAULT (unixepoch()),
+    reviewed_at   INTEGER,
+    reviewer      TEXT,
+    reject_reason TEXT
+  );
+`);
+
 module.exports = db;

@@ -65,12 +65,11 @@ class OracleManager {
 
         if (stage === Stage.PENDING) {
             const expiry = Number(market.expiration);
-            if (now >= expiry) {
-                console.log(`Oracle: market expired, proposing answer...`);
-                await this._proposeAnswer(questionId);
-            } else {
-                const mins = Math.floor((expiry - now) / 60);
+            const mins = Math.floor((expiry - now) / 60);
+            if (now < expiry) {
                 console.log(`Oracle: market expires in ${mins} min`);
+            } else {
+                console.log(`Oracle: market expired, waiting for MarketFactory to propose...`);
             }
             return;
         }

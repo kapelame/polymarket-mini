@@ -60,7 +60,8 @@ class MarketFactory {
     async createBtcMarket(durationSeconds = 300) {
         // Use chain time to avoid expiration errors after anvil time warps
         const block      = await this.provider.getBlock("latest");
-        const now        = Number(block.timestamp);
+        const now        = Number(block.timestamp) + 60; // buffer for tx delay
+    const wallNow    = Math.floor(Date.now() / 1000);
         const expiration = now + durationSeconds;
         const btcPrice   = await this.getBtcPrice();
 
@@ -86,7 +87,7 @@ class MarketFactory {
 
         const market = {
             questionId, conditionId, question,
-            btcEntryPrice: btcPrice, expiration, durationSeconds,
+            btcEntryPrice: btcPrice, expiration, wallExpiration: Math.floor(Date.now()/1000) + durationSeconds, durationSeconds,
             yesToken, noToken, status: "OPEN",
             createdAt: now,
         };

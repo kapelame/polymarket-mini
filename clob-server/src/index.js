@@ -1,12 +1,14 @@
 require("dotenv").config();
 const http       = require("http");
 const express    = require("express");
+const cors       = require("cors");
 const { OrderBook }      = require("./orderbook/OrderBook");
 const { MatchingEngine } = require("./matching/MatchingEngine");
 const { Settlement }     = require("./chain/Settlement");
 const { OracleManager }  = require("./chain/Oracle");
 const { WSServer }       = require("./api/websocket");
 const createRoutes       = require("./api/routes");
+const marketSubmitRoutes = require("./api/marketRoutes");
 
 const PORT          = process.env.PORT         || 3000;
 const RPC_URL       = process.env.RPC_URL       || "http://localhost:8545";
@@ -51,6 +53,9 @@ if (ORACLE_ADDR && OPERATOR_KEY !== "dry-run" && QUESTION_ID) {
 }
 
 const app = express();
+app.use(cors());
+app.use(express.json());
+app.use("/market/proposal", (req, res, next) => { req.app.set("marketFactory", factory); req.app.set("engine", engine); req.app.set("books", books); next(); }, marketSubmitRoutes);
 app.use(express.json());
 
 // Oracle status endpoint
@@ -121,6 +126,18 @@ app.post("/market/create/btc", async (req, res) => {
         console.error("Market creation failed:", e.message);
         res.status(500).json({ error: e.message });
     }
+});
+
+
+app.delete('/market/:questionId', (req, res) => {
+  const ok = factory.deleteMarket(req.params.questionId);
+  res.json({ ok });
+});
+
+
+app.delete('/market/:questionId', (req, res) => {
+  const ok = factory.deleteMarket(req.params.questionId);
+  res.json({ ok });
 });
 
 app.get("/market/list", (req, res) => {
