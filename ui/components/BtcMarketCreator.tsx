@@ -5,7 +5,7 @@ import { useAccount } from "wagmi";
 interface Market {
   questionId: string; question: string; btcEntryPrice: number;
   btcExitPrice?: number; expiration: number; yesToken: string; noToken: string;
-  status: "OPEN"|"SETTLED"|"ERROR"; result?: "YES"|"NO"; wallExpiration?: number; createdAt: number; wallExpiration?: number;
+  status: "OPEN"|"SETTLED"|"ERROR"; result?: "YES"|"NO"; wallExpiration?: number; createdAt: number;
 }
 
 function Countdown({ expiration }: { expiration: number }) {

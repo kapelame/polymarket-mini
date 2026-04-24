@@ -78,7 +78,10 @@ router.post("/approve/:id", async (req, res) => {
     if (row.type === "CRYPTO_PRICE") {
       market = await factory.createBtcMarket(row.duration);
     } else {
-      market = await factory.createCustomMarket(row.question, row.duration);
+      market = await factory.createCustomMarket(row.question, row.duration, {
+        category: row.category,
+        description: row.description,
+      });
     }
 
     books.set(market.yesToken, new OrderBook(market.yesToken));

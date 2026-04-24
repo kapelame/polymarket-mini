@@ -1,66 +1,69 @@
-## Foundry
+# Polymarket Mini
 
-**Foundry is a blazing fast, portable and modular toolkit for Ethereum application development written in Rust.**
+A local Polymarket-style prediction market app with:
 
-Foundry consists of:
+- Next.js trading UI
+- Express CLOB server
+- EIP-712 signed orders
+- Local order books, open orders, cancellations, and fills
+- Foundry contracts for a full Anvil setup
 
-- **Forge**: Ethereum testing framework (like Truffle, Hardhat and DappTools).
-- **Cast**: Swiss army knife for interacting with EVM smart contracts, sending transactions and getting chain data.
-- **Anvil**: Local Ethereum node, akin to Ganache, Hardhat Network.
-- **Chisel**: Fast, utilitarian, and verbose solidity REPL.
+## Quick Start
 
-## Documentation
-
-https://book.getfoundry.sh/
-
-## Usage
-
-### Build
-
-```shell
-$ forge build
+```bash
+npm run setup
+npm run dev
 ```
 
-### Test
+Then open:
 
-```shell
-$ forge test
+- UI: http://localhost:3001
+- CLOB API: http://localhost:3000
+
+The app starts in preview/dry-run mode when no `clob-server/.env` exists. You can browse the Polymarket-like UI immediately. Chain-backed market creation and signed order settlement require the full local chain setup below.
+
+## Useful Commands
+
+```bash
+npm run dev        # run CLOB + UI together
+npm run dev:clob   # run only the CLOB server
+npm run dev:ui     # run only the Next.js UI on port 3001
+npm run build      # build the UI
+npm run check      # build UI and syntax-check server files
 ```
 
-### Format
+## Full Local Chain Setup
 
-```shell
-$ forge fmt
+Start Anvil:
+
+```bash
+anvil
 ```
 
-### Gas Snapshots
+Deploy contracts from another terminal:
 
-```shell
-$ forge snapshot
+```bash
+PRIVATE_KEY=<anvil-account-private-key> \
+OPERATOR_ADDRESS=<operator-wallet-address> \
+forge script script/Deploy.s.sol:Deploy --rpc-url http://localhost:8545 --broadcast
 ```
 
-### Anvil
+Copy the env template:
 
-```shell
-$ anvil
+```bash
+cp clob-server/.env.example clob-server/.env
 ```
 
-### Deploy
+Update `clob-server/.env` with the deployed `USDC_ADDRESS`, `CTF_ADDRESS`, `EXCHANGE_ADDRESS`, `ORACLE_ADDRESS`, and set `OPERATOR_KEY` to the operator private key.
 
-```shell
-$ forge script script/Counter.s.sol:CounterScript --rpc-url <your_rpc_url> --private-key <your_private_key>
+Run everything:
+
+```bash
+npm run dev
 ```
 
-### Cast
+## Notes
 
-```shell
-$ cast <subcommand>
-```
-
-### Help
-
-```shell
-$ forge --help
-$ anvil --help
-$ cast --help
-```
+- Quick-start mode intentionally uses `OPERATOR_KEY=dry-run`; it is for fast UI review.
+- Never commit real private keys or production secrets.
+- The UI expects the CLOB API at `http://localhost:3000`.

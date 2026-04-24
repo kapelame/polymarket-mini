@@ -12,6 +12,8 @@ node_modules/
 .env
 .env.local
 .env.*
+!.env.example
+!**/.env.example
 
 # Anvil state
 anvil-state.json

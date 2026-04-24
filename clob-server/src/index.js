@@ -128,16 +128,36 @@ app.post("/market/create/btc", async (req, res) => {
     }
 });
 
+app.post("/market/create/custom", async (req, res) => {
+    try {
+        const duration = parseInt(req.body.duration || "86400");
+        if (duration < 60 || duration > 31536000)
+            return res.status(400).json({ error: "duration must be 60-31536000 seconds" });
 
-app.delete('/market/:questionId', (req, res) => {
-  const ok = factory.deleteMarket(req.params.questionId);
-  res.json({ ok });
+        const market = await factory.createCustomMarket(req.body.question, duration, {
+            category: req.body.category || "news",
+            description: req.body.description || "",
+        });
+
+        books.set(market.yesToken, new (require("./orderbook/OrderBook").OrderBook)(market.yesToken));
+        books.set(market.noToken,  new (require("./orderbook/OrderBook").OrderBook)(market.noToken));
+        engine.registerPair(market.yesToken, market.noToken);
+
+        console.log(`New custom market added to engine: ${market.question.slice(0,50)}...`);
+        res.json(market);
+    } catch (e) {
+        console.error("Custom market creation failed:", e.message);
+        res.status(500).json({ error: e.message });
+    }
 });
 
-
 app.delete('/market/:questionId', (req, res) => {
-  const ok = factory.deleteMarket(req.params.questionId);
-  res.json({ ok });
+    const market = factory.deleteMarket(req.params.questionId);
+    if (market) {
+        books.delete(market.yesToken);
+        books.delete(market.noToken);
+    }
+    res.json({ ok: !!market });
 });
 
 app.get("/market/list", (req, res) => {

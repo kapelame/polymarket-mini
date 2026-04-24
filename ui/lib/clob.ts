@@ -17,6 +17,19 @@ export interface Orderbook {
   asks: OrderLevel[];
 }
 
+export interface OpenOrder {
+  order_id: string;
+  maker: string;
+  token_id: string;
+  side: "BUY" | "SELL";
+  price: number;
+  maker_amount: string;
+  taker_amount: string;
+  filled: string;
+  status: string;
+  created_at: number;
+}
+
 let _creds: ApiCreds | null = null;
 export function setCreds(c: ApiCreds) { _creds = c; }
 export function getCreds() { return _creds; }
@@ -24,8 +37,12 @@ export function getCreds() { return _creds; }
 export function parseLevels(levels: any[]): OrderLevel[] {
   return (levels || []).map(l => ({
     price: parseFloat(l.price ?? l[0]),
-    size:  parseFloat(l.size  ?? l[1]),
+    size:  normalizeSize(parseFloat(l.size  ?? l[1])),
   })).filter(l => !isNaN(l.price) && !isNaN(l.size));
+}
+
+function normalizeSize(size: number) {
+  return size > 100000 ? size / 1e6 : size;
 }
 
 export async function fetchOrderbook(tokenId: string): Promise<Orderbook> {
@@ -54,6 +71,20 @@ export async function postOrder(order: object) {
   const body    = JSON.stringify(order);
   const headers = await l2Headers("POST", "/order", body);
   const r       = await fetch(`${CLOB_URL}/order`, { method: "POST", headers, body });
+  return r.json();
+}
+
+export async function fetchOpenOrders(address: string): Promise<OpenOrder[]> {
+  const headers = await l2Headers("GET", `/orders/${address}`);
+  const r = await fetch(`${CLOB_URL}/orders/${address}`, { headers });
+  const data = await r.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+export async function cancelOrder(orderId: string) {
+  const headers = await l2Headers("DELETE", `/order/${orderId}`);
+  const r = await fetch(`${CLOB_URL}/order/${encodeURIComponent(orderId)}`, { method: "DELETE", headers });
   return r.json();
 }
 

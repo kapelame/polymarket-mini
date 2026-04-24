@@ -20,20 +20,28 @@ const USDC_ABI = [
 
 class MarketFactory {
     constructor(rpcUrl, operatorKey, { ctfAddress, oracleAddress, exchangeAddress, usdcAddress }) {
+        this.dryRun        = !operatorKey || operatorKey === "dry-run";
         this.provider      = new ethers.JsonRpcProvider(rpcUrl);
+        this.usdcAddress   = usdcAddress;
+        this.oracleAddress = oracleAddress;
+        this.markets       = new Map();
+
+        if (this.dryRun) {
+            console.log("MarketFactory: DRY RUN mode (set OPERATOR_KEY to enable market creation)");
+            return;
+        }
+
         this.operator      = new ethers.Wallet(operatorKey, this.provider);
         this.ctf           = new ethers.Contract(ctfAddress,      CTF_ABI,      this.operator);
         this.oracle        = new ethers.Contract(oracleAddress,   ORACLE_ABI,   this.operator);
         this.exchange      = new ethers.Contract(exchangeAddress, EXCHANGE_ABI, this.operator);
         this.usdc          = new ethers.Contract(usdcAddress,     USDC_ABI,     this.operator);
-        this.usdcAddress   = usdcAddress;
-        this.oracleAddress = oracleAddress;
-        this.markets       = new Map();
         this.nm            = getNonceManager(this.provider, this.operator.address);
         console.log("MarketFactory: ready");
     }
 
     async _send(contractMethod, ...args) {
+        if (this.dryRun) throw new Error("MarketFactory is in dry-run mode; set OPERATOR_KEY to create markets");
         const nonce = await this.nm.next();
         const tx    = await contractMethod(...args, { nonce });
         await tx.wait();
@@ -58,6 +66,7 @@ class MarketFactory {
     }
 
     async createBtcMarket(durationSeconds = 300) {
+        if (this.dryRun) throw new Error("Market creation requires OPERATOR_KEY and deployed contract addresses");
         // Use chain time to avoid expiration errors after anvil time warps
         const block      = await this.provider.getBlock("latest");
         const now        = Number(block.timestamp) + 60; // buffer for tx delay
@@ -101,6 +110,57 @@ class MarketFactory {
         return market;
     }
 
+    async createCustomMarket(question, durationSeconds = 86400, metadata = {}) {
+        if (this.dryRun) throw new Error("Market creation requires OPERATOR_KEY and deployed contract addresses");
+        const cleanQuestion = String(question || "").trim();
+        if (cleanQuestion.length < 10) throw new Error("question too short");
+        if (durationSeconds < 60) throw new Error("duration must be at least 60 seconds");
+
+        const block      = await this.provider.getBlock("latest");
+        const now        = Number(block.timestamp) + 60;
+        const wallNow    = Math.floor(Date.now() / 1000);
+        const expiration = now + durationSeconds;
+        const seed       = `${cleanQuestion}|${wallNow}|${Math.random()}`;
+        const questionId = ethers.keccak256(ethers.toUtf8Bytes(seed));
+
+        console.log(`MarketFactory: creating custom "${cleanQuestion}"`);
+        console.log(`  expires: ${new Date(expiration * 1000).toISOString()}`);
+
+        await this.nm.sync();
+
+        await this._send((...a) => this.ctf.prepareCondition(...a), this.oracleAddress, questionId, 2);
+        const conditionId = await this.ctf.getConditionId(this.oracleAddress, questionId, 2);
+
+        await this._send((...a) => this.oracle.prepareMarket(...a), questionId, conditionId, expiration);
+        await this._send((...a) => this.exchange.registerToken(...a), conditionId, 1);
+        await this._send((...a) => this.exchange.registerToken(...a), conditionId, 2);
+
+        const yesCollId = await this.ctf.getCollectionId(ethers.ZeroHash, conditionId, 1);
+        const noCollId  = await this.ctf.getCollectionId(ethers.ZeroHash, conditionId, 2);
+        const yesToken  = (await this.ctf.getPositionId(this.usdcAddress, yesCollId)).toString();
+        const noToken   = (await this.ctf.getPositionId(this.usdcAddress,  noCollId)).toString();
+
+        const market = {
+            questionId,
+            conditionId,
+            question: cleanQuestion,
+            description: metadata.description || "",
+            category: metadata.category || "news",
+            expiration,
+            wallExpiration: wallNow + durationSeconds,
+            durationSeconds,
+            yesToken,
+            noToken,
+            status: "OPEN",
+            createdAt: now,
+            marketType: "CUSTOM",
+        };
+        this.markets.set(questionId, market);
+
+        console.log(`MarketFactory: ✓ custom YES=${yesToken.slice(0,20)}...`);
+        return market;
+    }
+
     async _resolveMarket(questionId) {
         const market = this.markets.get(questionId);
         if (!market || market.status !== "OPEN") return;
@@ -136,6 +196,12 @@ class MarketFactory {
 
     getMarkets() { return [...this.markets.values()]; }
     getMarket(q) { return this.markets.get(q) || null; }
+    deleteMarket(q) {
+        const market = this.markets.get(q);
+        if (!market) return null;
+        this.markets.delete(q);
+        return market;
+    }
 }
 
 module.exports = { MarketFactory };

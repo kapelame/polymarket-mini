@@ -1,0 +1,13 @@
+{
+  "name": "polymarket-mini",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "setup": "npm --prefix clob-server install && npm --prefix ui install",
+    "dev": "node scripts/dev-local.mjs",
+    "dev:clob": "npm --prefix clob-server start",
+    "dev:ui": "npm --prefix ui run dev -- --port 3001",
+    "build": "npm --prefix ui run build",
+    "check": "npm --prefix ui run build && node --check clob-server/src/index.js && node --check clob-server/src/chain/MarketFactory.js && node --check clob-server/src/api/marketRoutes.js"
+  }
+}

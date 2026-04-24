@@ -1,90 +1,88 @@
 "use client";
+
 import { useEffect, useRef, useState } from "react";
+import { CLOB_URL } from "../lib/signing";
 
 interface Fill {
-  time:  string;
-  side:  string;
+  time: string;
+  side: string;
   price: string;
-  size:  string;
+  size: string;
 }
+
+const WS_URL = CLOB_URL.replace(/^http/, "ws");
 
 export default function TradeHistory({ yesToken }: { yesToken?: string }) {
   const [fills, setFills] = useState<Fill[]>([]);
   const ws = useRef<WebSocket | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      if (!yesToken) return;
+      try {
+        const response = await fetch(`${CLOB_URL}/trades/${yesToken}?limit=30`);
+        const data = await response.json();
+        if (!cancelled && Array.isArray(data)) {
+          setFills(data.map((trade) => ({
+            time: new Date((trade.created_at || Date.now() / 1000) * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+            side: "FILL",
+            price: `${Math.round(Number(trade.price || 0) * 100)}c`,
+            size: (Number(trade.size || 0) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 }),
+          })));
+        }
+      } catch {}
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [yesToken]);
+
+  useEffect(() => {
     try {
-      ws.current = new WebSocket("ws://localhost:3000");
-      ws.current.onmessage = (e) => {
-        const msg = JSON.parse(e.data);
-        if (msg.type === "fill") {
-          setFills(prev => [{
-            time:  new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
-            side:  msg.data.side,
-            price: parseFloat(msg.data.price).toFixed(4),
-            size:  (parseInt(msg.data.size) / 1e6).toLocaleString(),
-          }, ...prev].slice(0, 30));
+      ws.current = new WebSocket(WS_URL);
+      ws.current.onmessage = (event) => {
+        const msg = JSON.parse(event.data);
+        if (msg.type === "fill" && (!yesToken || msg.tokenId === yesToken)) {
+          setFills((current) => [{
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+            side: msg.side || "FILL",
+            price: `${Math.round(Number(msg.price || 0) * 100)}c`,
+            size: ((Number(msg.makerFill || msg.size || 0)) / 1e6).toLocaleString(undefined, { maximumFractionDigits: 2 }),
+          }, ...current].slice(0, 30));
         }
       };
     } catch {}
     return () => ws.current?.close();
-  }, []);
+  }, [yesToken]);
 
   return (
-    <div className="card" style={{ overflow: "hidden" }}>
-      <div style={{
-        padding: "14px 16px",
-        borderBottom: "1px solid var(--border)",
-        display: "flex", alignItems: "center", justifyContent: "space-between",
-      }}>
-        <span style={{ fontWeight: 600, fontSize: 13 }}>Trade History</span>
-        <span style={{ fontSize: 11, color: "var(--text3)" }}>{fills.length} fills</span>
+    <div className="book-panel">
+      <div className="panel-heading">
+        <h2>Trades</h2>
+        <span className="subtle">{fills.length} fills</span>
       </div>
-
-      <div style={{
-        display: "grid", gridTemplateColumns: "1fr 1fr 1fr 80px",
-        padding: "8px 16px",
-        borderBottom: "1px solid var(--border)",
-      }}>
-        {["Time", "Price", "Shares", "Side"].map((h, i) => (
-          <span key={h} style={{
-            fontSize: 11, color: "var(--text3)", fontWeight: 500,
-            textAlign: i === 3 ? "right" : "left",
-          }}>{h}</span>
-        ))}
+      <div className="table-head" style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
+        <span>Time</span>
+        <span>Price</span>
+        <span>Shares</span>
+        <span style={{ textAlign: "right" }}>Side</span>
       </div>
-
-      <div style={{ maxHeight: 280, overflowY: "auto" }}>
-        {fills.length === 0 ? (
-          <div style={{ padding: "32px 16px", textAlign: "center" }}>
-            <div style={{ fontSize: 13, color: "var(--text3)" }}>No trades yet</div>
-            <div style={{ fontSize: 12, color: "var(--text3)", marginTop: 4 }}>
-              Place an order to see trades appear here
-            </div>
+      {fills.length === 0 ? (
+        <div style={{ padding: 28, textAlign: "center" }}>
+          <span className="subtle">No trades yet.</span>
+        </div>
+      ) : (
+        fills.map((fill, index) => (
+          <div className="trade-row" key={`${fill.time}-${index}`} style={{ gridTemplateColumns: "1fr 1fr 1fr 1fr" }}>
+            <span>{fill.time}</span>
+            <span className="mono" style={{ color: fill.side === "SELL" ? "var(--red)" : "var(--green)", fontWeight: 700 }}>{fill.price}</span>
+            <span className="mono">{fill.size}</span>
+            <span style={{ textAlign: "right", color: "var(--text3)", fontWeight: 700 }}>{fill.side}</span>
           </div>
-        ) : fills.map((f, i) => (
-          <div key={i} style={{
-            display: "grid", gridTemplateColumns: "1fr 1fr 1fr 80px",
-            padding: "8px 16px",
-            borderBottom: "1px solid var(--border)",
-            transition: "background 0.1s",
-          }}
-          onMouseEnter={e => (e.currentTarget.style.background = "var(--surface2)")}
-          onMouseLeave={e => (e.currentTarget.style.background = "")}>
-            <span style={{ fontSize: 12, color: "var(--text3)" }}>{f.time}</span>
-            <span className="mono" style={{
-              fontSize: 12,
-              color: f.side === "BUY" ? "var(--green)" : "var(--red)",
-              fontWeight: 500,
-            }}>{f.price}</span>
-            <span className="mono" style={{ fontSize: 12, color: "var(--text2)" }}>{f.size}</span>
-            <span style={{
-              fontSize: 11, fontWeight: 600, textAlign: "right",
-              color: f.side === "BUY" ? "var(--green)" : "var(--red)",
-            }}>{f.side}</span>
-          </div>
-        ))}
-      </div>
+        ))
+      )}
     </div>
   );
 }
