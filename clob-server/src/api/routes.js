@@ -43,11 +43,11 @@ module.exports = function createRoutes(books) {
             const existing = ApiKeyRepo.getByAddress(address);
             if (existing) {
                 // Restore into memory store for L2 verification
-                apiKeyStore.keys[existing.api_key] = {
+                apiKeyStore.keys.set(existing.api_key, {
                     address:    existing.address,
                     secret:     existing.secret,
                     passphrase: existing.passphrase,
-                };
+                });
                 console.log(`API key restored for ${address.slice(0,10)}`);
                 return res.json({
                     apiKey:     existing.api_key,
@@ -85,11 +85,11 @@ module.exports = function createRoutes(books) {
                 const apiKey = req.headers["poly_api_key"];
                 const stored = apiKey ? ApiKeyRepo.getByKey(apiKey) : null;
                 if (stored) {
-                    apiKeyStore.keys[stored.api_key] = {
+                    apiKeyStore.keys.set(stored.api_key, {
                         address:    stored.address,
                         secret:     stored.secret,
                         passphrase: stored.passphrase,
-                    };
+                    });
                     trader = verifyL2Headers(req, apiKeyStore.keys);
                 } else {
                     throw new Error("Unauthorized");
