@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useAccount } from "wagmi";
 import Link from "next/link";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import WalletButton from "../../components/WalletButton";
 
 const ADMIN = "0x70997970c51812dc3a010c7d01b50e0d17dc79c8";
 const CATEGORY_EMOJI: Record<string,string> = {sports:"⚽",politics:"🏛️",crypto:"₿",tech:"💻",entertainment:"🎬",other:"🔮"};
@@ -85,7 +85,7 @@ export default function AdminPage() {
           <span style={{fontWeight:700,fontSize:15}}>Admin Panel</span>
           {isAdmin && <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:5,background:"rgba(59,130,246,0.15)",color:"#3b82f6"}}>ADMIN</span>}
         </div>
-        <ConnectButton chainStatus="none" showBalance={false} label="Connect" />
+        <WalletButton />
       </header>
 
       <div style={{maxWidth:860,margin:"0 auto",padding:"24px 16px"}}>

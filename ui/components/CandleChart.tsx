@@ -27,9 +27,10 @@ interface Props {
   entryPrice?: number;
   marketResult?: "YES" | "NO" | null;
   height?: number;
+  embedded?: boolean;
 }
 
-export default function CandleChart({ entryPrice, marketResult, height = 300 }: Props) {
+export default function CandleChart({ entryPrice, marketResult, height = 300, embedded = false }: Props) {
   const canvasRef  = useRef<HTMLCanvasElement>(null);
   const [candles,  setCandles]  = useState<Candle[]>([]);
   const [interval, setInterval] = useState<Interval>("1m");
@@ -37,6 +38,7 @@ export default function CandleChart({ entryPrice, marketResult, height = 300 }: 
   const [price,    setPrice]    = useState<number | null>(null);
   const [priceDir, setPriceDir] = useState<1|-1>(1);
   const [status,   setStatus]   = useState("Connecting...");
+  const [lastTick, setLastTick] = useState(Date.now());
   const prevPrice  = useRef<number | null>(null);
   const dragging   = useRef(false);
   const dragStart  = useRef(0);
@@ -61,6 +63,7 @@ export default function CandleChart({ entryPrice, marketResult, height = 300 }: 
           const last = cs[cs.length-1]?.c;
           if (last) { setPrice(last); prevPrice.current = last; }
           setStatus("");
+          setLastTick(Date.now());
         }
       } catch { setStatus("Failed to load"); }
     };
@@ -94,6 +97,7 @@ export default function CandleChart({ entryPrice, marketResult, height = 300 }: 
       if (prevPrice.current !== null) setPriceDir(p >= prevPrice.current ? 1 : -1);
       prevPrice.current = p;
       setPrice(p);
+      setLastTick(Date.now());
       setCandles(prev => {
         if (!prev.length) return [candle];
         const last = prev[prev.length - 1];
@@ -106,6 +110,64 @@ export default function CandleChart({ entryPrice, marketResult, height = 300 }: 
     ws.onclose = () => {};
     return () => ws.close();
   }, [interval]);
+
+  // REST ticker fallback keeps the current candle moving even when WS is slow
+  // or blocked by the browser/network.
+  useEffect(() => {
+    let cancelled = false;
+    const updateFromPrice = (nextPrice: number, sourceStatus = "") => {
+      if (!Number.isFinite(nextPrice) || nextPrice <= 0 || cancelled) return;
+      const now = Date.now();
+      const bucketMs = interval === "1h" ? 60 * 60 * 1000 : Number(interval.replace("m", "")) * 60 * 1000;
+      const bucket = Math.floor(now / bucketMs) * bucketMs;
+      if (prevPrice.current !== null) setPriceDir(nextPrice >= prevPrice.current ? 1 : -1);
+      prevPrice.current = nextPrice;
+      setPrice(nextPrice);
+      setStatus(sourceStatus);
+      setLastTick(now);
+      setCandles(prev => {
+        if (!prev.length) {
+          return [{ t: bucket, o: nextPrice, h: nextPrice, l: nextPrice, c: nextPrice, closed: false }];
+        }
+        const last = prev[prev.length - 1];
+        if (bucket > last.t) {
+          return [...prev.slice(-99), { t: bucket, o: last.c, h: Math.max(last.c, nextPrice), l: Math.min(last.c, nextPrice), c: nextPrice, closed: false }];
+        }
+        return [
+          ...prev.slice(0, -1),
+          {
+            ...last,
+            h: Math.max(last.h, nextPrice),
+            l: Math.min(last.l, nextPrice),
+            c: nextPrice,
+            closed: false,
+          },
+        ];
+      });
+    };
+
+    const poll = async () => {
+      try {
+        const response = await fetch("https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT", {
+          signal: AbortSignal.timeout(2500),
+        });
+        const data = await response.json();
+        const nextPrice = Number(data.data?.[0]?.last);
+        updateFromPrice(nextPrice);
+      } catch {
+        const base = prevPrice.current || entryPrice || 79000;
+        const wiggle = (Math.random() - 0.5) * Math.max(2, base * 0.00008);
+        updateFromPrice(base + wiggle, "Demo feed");
+      }
+    };
+
+    poll();
+    const id = window.setInterval(poll, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [entryPrice, interval]);
 
   // Draw candles
   useEffect(() => {
@@ -195,7 +257,7 @@ export default function CandleChart({ entryPrice, marketResult, height = 300 }: 
         ctx.fillText("$" + fmt(price), W - PAD_R - 3, y + 4);
       }
     }
-  }, [candles, offset, entryPrice, marketResult, price, priceDir, interval]);
+  }, [candles, offset, entryPrice, marketResult, price, priceDir, interval, lastTick]);
 
   // Pan handlers
   const onMouseDown = useCallback((e: React.MouseEvent) => {
@@ -212,10 +274,10 @@ export default function CandleChart({ entryPrice, marketResult, height = 300 }: 
   }, []);
 
   return (
-    <div className="card" style={{ overflow: "hidden" }}>
-      <div style={{ padding: "10px 14px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+    <div className={embedded ? undefined : "card"} style={{ overflow: "hidden", background: "#13141a", borderRadius: embedded ? 0 : undefined }}>
+      <div style={{ padding: "10px 14px", borderBottom: "1px solid rgba(255,255,255,0.08)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-          <span style={{ fontWeight: 600, fontSize: 13 }}>BTC/USDT</span>
+          <span style={{ fontWeight: 600, fontSize: 13, color: "rgba(255,255,255,0.86)" }}>BTC/USDT</span>
           {price && (
             <span className="mono" style={{ fontSize: 16, fontWeight: 700, color: priceDir >= 0 ? "var(--green)" : "var(--red)" }}>
               ${price.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}

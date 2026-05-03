@@ -4,11 +4,12 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import WalletButton from "../../../components/WalletButton";
 import { CLOB_URL } from "../../../lib/signing";
 import { fetchOrderbook } from "../../../lib/clob";
 
 const PriceChart = dynamic(() => import("../../../components/PriceChart"), { ssr: false });
+const CandleChart = dynamic(() => import("../../../components/CandleChart"), { ssr: false });
 const OrderBook = dynamic(() => import("../../../components/OrderBook"), { ssr: false });
 const OrderForm = dynamic(() => import("../../../components/OrderForm"), { ssr: false });
 const TradeHistory = dynamic(() => import("../../../components/TradeHistory"), { ssr: false });
@@ -88,7 +89,7 @@ function Header() {
             <Link href="/">Markets</Link>
             <Link href="/admin">Admin</Link>
           </nav>
-          <ConnectButton chainStatus="none" showBalance={false} label="Connect" />
+          <WalletButton />
         </div>
       </div>
     </header>
@@ -266,7 +267,11 @@ export default function MarketPage() {
               </div>
             </div>
             <div style={{ padding: tab === "chart" ? 0 : 14 }}>
-              {tab === "chart" && <PriceChart yesToken={market.yesToken} question={market.question} embedded />}
+              {tab === "chart" && (
+                market.btcEntryPrice
+                  ? <CandleChart entryPrice={market.btcEntryPrice} marketResult={market.result || null} embedded />
+                  : <PriceChart yesToken={market.yesToken} question={market.question} embedded />
+              )}
               {tab === "book" && <OrderBook tokenId={activeToken} label={outcome} />}
               {tab === "trades" && <TradeHistory yesToken={market.yesToken} />}
             </div>

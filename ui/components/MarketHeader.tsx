@@ -1,5 +1,5 @@
 "use client";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import WalletButton from "./WalletButton";
 
 export default function MarketHeader({ question }: { question?: string }) {
   return (
@@ -28,7 +28,7 @@ export default function MarketHeader({ question }: { question?: string }) {
           </span>
         </div>
       </div>
-      <ConnectButton chainStatus="none" showBalance={false} label="Connect Wallet" />
+      <WalletButton />
     </header>
   );
 }

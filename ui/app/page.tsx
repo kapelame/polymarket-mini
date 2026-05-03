@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAccount } from "wagmi";
 import Link from "next/link";
-import { ConnectButton } from "@rainbow-me/rainbowkit";
+import WalletButton from "../components/WalletButton";
 import { CLOB_URL } from "../lib/signing";
 import { fetchOrderbook } from "../lib/clob";
 
@@ -493,7 +493,7 @@ export default function MarketsPage() {
               <PlusIcon />
               Create
             </button>
-            <ConnectButton chainStatus="none" showBalance={false} label="Connect" />
+            <WalletButton />
           </div>
         </div>
         <div className="topic-strip">

@@ -18,16 +18,22 @@ export interface Orderbook {
 }
 
 export interface OpenOrder {
-  order_id: string;
+  order_id?: string;
+  orderId?: string;
+  id?: string;
   maker: string;
-  token_id: string;
+  token_id?: string;
+  tokenId?: string;
   side: "BUY" | "SELL";
-  price: number;
-  maker_amount: string;
-  taker_amount: string;
+  price?: number | string;
+  maker_amount?: string;
+  taker_amount?: string;
+  makerAmount?: string;
+  takerAmount?: string;
   filled: string;
   status: string;
-  created_at: number;
+  created_at?: number;
+  createdAt?: number;
 }
 
 let _creds: ApiCreds | null = null;

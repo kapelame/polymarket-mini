@@ -250,6 +250,67 @@ input[type="number"]::-webkit-outer-spin-button {
   background: var(--blue2);
 }
 
+.wallet-connect {
+  position: relative;
+}
+
+.wallet-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 90;
+  width: 220px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: var(--shadow);
+}
+
+.wallet-menu-header {
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text2);
+  font-size: 12px;
+}
+
+.wallet-option {
+  display: flex;
+  width: 100%;
+  min-height: 44px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: #fff;
+  color: var(--text);
+  cursor: pointer;
+  font-weight: 750;
+}
+
+.wallet-option:last-child {
+  border-bottom: 0;
+}
+
+.wallet-option:hover {
+  background: var(--surface2);
+}
+
+.wallet-option:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.wallet-status {
+  padding: 10px 12px;
+  border-top: 1px solid var(--border);
+  color: var(--red);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
 .pm-button.green {
   border-color: var(--green);
   background: var(--green);

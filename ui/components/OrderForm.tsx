@@ -36,6 +36,23 @@ function shortOrderId(orderId: string) {
   return orderId.length > 18 ? `${orderId.slice(0, 8)}...${orderId.slice(-6)}` : orderId;
 }
 
+function getOrderId(order: OpenOrder) {
+  return order.order_id || order.orderId || order.id || "";
+}
+
+function getOrderTokenId(order: OpenOrder) {
+  return order.token_id || order.tokenId || "";
+}
+
+function getOrderPrice(order: OpenOrder) {
+  const explicit = Number(order.price);
+  if (Number.isFinite(explicit)) return explicit;
+  const makerAmount = Number(order.maker_amount || order.makerAmount || 0);
+  const takerAmount = Number(order.taker_amount || order.takerAmount || 0);
+  if (!makerAmount || !takerAmount) return 0;
+  return order.side === "BUY" ? makerAmount / takerAmount : takerAmount / makerAmount;
+}
+
 export default function OrderForm({ yesToken: yesTokenProp, noToken: noTokenProp }: OrderFormProps) {
   const { address } = useAccount();
   const yesToken = yesTokenProp || YES_TOKEN;
@@ -286,7 +303,7 @@ export default function OrderForm({ yesToken: yesTokenProp, noToken: noTokenProp
       await ensureAuth();
       const result = await cancelOrder(orderId);
       if (result.error) throw new Error(result.error);
-      setOrders((current) => current.filter((order) => order.order_id !== orderId));
+      setOrders((current) => current.filter((order) => getOrderId(order) !== orderId));
       setStatus("Order cancelled");
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Cancel failed");
@@ -415,20 +432,24 @@ export default function OrderForm({ yesToken: yesTokenProp, noToken: noTokenProp
           {orders.length === 0 ? (
             <p className="status-text">No open orders loaded.</p>
           ) : (
-            orders.slice(0, 5).map((order) => (
-              <div className="order-row" key={order.order_id}>
+            orders.slice(0, 5).map((order) => {
+              const orderId = getOrderId(order);
+              const tokenIdForOrder = getOrderTokenId(order);
+              return (
+              <div className="order-row" key={orderId || `${order.maker}-${order.side}-${order.makerAmount}-${order.takerAmount}`}>
                 <div className="ticket-line">
-                  <strong>{order.side} {order.token_id === yesToken ? "YES" : "NO"}</strong>
-                  <span className="mono">{Math.round(Number(order.price) * 100)}c</span>
+                  <strong>{order.side} {tokenIdForOrder === yesToken ? "YES" : "NO"}</strong>
+                  <span className="mono">{Math.round(getOrderPrice(order) * 100)}c</span>
                 </div>
                 <div className="ticket-line">
-                  <span className="mono">{shortOrderId(order.order_id)}</span>
-                  <button className="small-link" type="button" onClick={() => cancelOpenOrder(order.order_id)}>
+                  <span className="mono">{orderId ? shortOrderId(orderId) : "Pending"}</span>
+                  <button className="small-link" type="button" disabled={!orderId} onClick={() => cancelOpenOrder(orderId)}>
                     Cancel
                   </button>
                 </div>
               </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>
