@@ -53,6 +53,14 @@ function getOrderPrice(order: OpenOrder) {
   return order.side === "BUY" ? makerAmount / takerAmount : takerAmount / makerAmount;
 }
 
+function onlyLiveOrders(items: OpenOrder[], yesToken: string, noToken: string) {
+  return items.filter((order) => {
+    const status = String(order.status || "OPEN").toUpperCase();
+    const tokenId = getOrderTokenId(order);
+    return (status === "OPEN" || status === "PARTIAL") && (tokenId === yesToken || tokenId === noToken);
+  });
+}
+
 export default function OrderForm({ yesToken: yesTokenProp, noToken: noTokenProp }: OrderFormProps) {
   const { address } = useAccount();
   const yesToken = yesTokenProp || YES_TOKEN;
@@ -176,7 +184,7 @@ export default function OrderForm({ yesToken: yesTokenProp, noToken: noTokenProp
     setOrdersLoading(true);
     try {
       await ensureAuth();
-      setOrders(await fetchOpenOrders(address));
+      setOrders(onlyLiveOrders(await fetchOpenOrders(address), yesToken, noToken));
     } catch (err) {
       setStatus(err instanceof Error ? err.message : "Could not load orders");
     } finally {
@@ -289,6 +297,9 @@ export default function OrderForm({ yesToken: yesTokenProp, noToken: noTokenProp
       if (result.error) throw new Error(result.error);
       setStatus("Order placed");
       await loadOpenOrders();
+      window.setTimeout(() => {
+        void loadOpenOrders();
+      }, 1600);
     } catch (err) {
       setStatus(err instanceof Error ? err.message.slice(0, 140) : "Order failed");
     } finally {

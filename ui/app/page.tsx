@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useAccount } from "wagmi";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import WalletButton from "../components/WalletButton";
 import { CLOB_URL } from "../lib/signing";
 import { fetchOrderbook } from "../lib/clob";
@@ -246,7 +247,7 @@ function CreateMarketModal({
 }) {
   const { address } = useAccount();
   const [mode, setMode] = useState<"btc" | "custom">("btc");
-  const [duration, setDuration] = useState(300);
+  const [duration, setDuration] = useState(60);
   const [customDuration, setCustomDuration] = useState(86400 * 7);
   const [question, setQuestion] = useState("");
   const [description, setDescription] = useState("");
@@ -329,7 +330,7 @@ function CreateMarketModal({
                 </div>
               </div>
               <p className="status-text">
-                This uses the existing local BTC oracle flow: entry price is captured when the market is created, then the market auto-resolves after expiration.
+                One-minute demo path: entry price is captured, demo liquidity is seeded, and the market auto-settles after expiration.
               </p>
             </div>
           ) : (
@@ -390,6 +391,7 @@ function CreateMarketModal({
 }
 
 export default function MarketsPage() {
+  const router = useRouter();
   const [markets, setMarkets] = useState<Market[]>([]);
   const [marketViews, setMarketViews] = useState<MarketView[]>([]);
   const [trades, setTrades] = useState<TradeRow[]>([]);
@@ -642,7 +644,15 @@ export default function MarketsPage() {
         </aside>
       </main>
 
-      {showCreate && <CreateMarketModal onClose={() => setShowCreate(false)} onCreate={(market) => setMarkets((current) => [market, ...current])} />}
+      {showCreate && (
+        <CreateMarketModal
+          onClose={() => setShowCreate(false)}
+          onCreate={(market) => {
+            setMarkets((current) => [market, ...current]);
+            router.push(`/market/${market.questionId}`);
+          }}
+        />
+      )}
     </div>
   );
 }

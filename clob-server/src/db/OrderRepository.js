@@ -23,14 +23,16 @@ const getOpen = db.prepare(`
 const getById = db.prepare(`SELECT * FROM orders WHERE order_id = @orderId`);
 
 const getByMaker = db.prepare(`
-  SELECT * FROM orders WHERE maker = @maker ORDER BY created_at DESC LIMIT 50
+  SELECT * FROM orders
+  WHERE maker = @maker AND status IN ('OPEN','PARTIAL')
+  ORDER BY created_at DESC LIMIT 50
 `);
 
 module.exports = {
   save(order) {
     const price = order.side === "BUY"
-      ? parseInt(order.takerAmount) / parseInt(order.makerAmount)
-      : parseInt(order.makerAmount) / parseInt(order.takerAmount);
+      ? parseInt(order.makerAmount) / parseInt(order.takerAmount)
+      : parseInt(order.takerAmount) / parseInt(order.makerAmount);
 
     insert.run({
       orderId:     order.orderId,

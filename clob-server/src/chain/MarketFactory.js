@@ -42,9 +42,7 @@ class MarketFactory {
 
     async _send(contractMethod, ...args) {
         if (this.dryRun) throw new Error("MarketFactory is in dry-run mode; set OPERATOR_KEY to create markets");
-        const nonce = await this.nm.next();
-        const tx    = await contractMethod(...args, { nonce });
-        await tx.wait();
+        const { tx } = await this.nm.send((nonce) => contractMethod(...args, { nonce }));
         return tx;
     }
 
@@ -67,14 +65,16 @@ class MarketFactory {
 
     async createBtcMarket(durationSeconds = 300) {
         if (this.dryRun) throw new Error("Market creation requires OPERATOR_KEY and deployed contract addresses");
-        // Use chain time to avoid expiration errors after anvil time warps
+        // Keep chain expiration safely ahead of Anvil's warped block time.
+        // The UI/demo countdown still uses wallExpiration below.
         const block      = await this.provider.getBlock("latest");
-        const now        = Number(block.timestamp) + 60; // buffer for tx delay
-    const wallNow    = Math.floor(Date.now() / 1000);
-        const expiration = now + durationSeconds;
+        const chainNow   = Number(block.timestamp);
+        const chainStart = chainNow + 3600;
+        const wallNow    = Math.floor(Date.now() / 1000);
+        const expiration = chainStart + durationSeconds;
         const btcPrice   = await this.getBtcPrice();
 
-        const question   = `Will BTC be higher than $${btcPrice.toFixed(0)} in ${Math.floor(durationSeconds/60)} min? t=${now}`;
+        const question   = `Will BTC be higher than $${btcPrice.toFixed(0)} in ${Math.floor(durationSeconds/60)} min? t=${wallNow}`;
         const questionId = ethers.keccak256(ethers.toUtf8Bytes(question));
 
         console.log(`MarketFactory: creating "${question}"`);
@@ -98,7 +98,7 @@ class MarketFactory {
             questionId, conditionId, question,
             btcEntryPrice: btcPrice, expiration, wallExpiration: Math.floor(Date.now()/1000) + durationSeconds, durationSeconds,
             yesToken, noToken, status: "OPEN",
-            createdAt: now,
+            createdAt: wallNow,
         };
         this.markets.set(questionId, market);
 
@@ -117,9 +117,10 @@ class MarketFactory {
         if (durationSeconds < 60) throw new Error("duration must be at least 60 seconds");
 
         const block      = await this.provider.getBlock("latest");
-        const now        = Number(block.timestamp) + 60;
+        const chainNow   = Number(block.timestamp);
+        const chainStart = chainNow + 3600;
         const wallNow    = Math.floor(Date.now() / 1000);
-        const expiration = now + durationSeconds;
+        const expiration = chainStart + durationSeconds;
         const seed       = `${cleanQuestion}|${wallNow}|${Math.random()}`;
         const questionId = ethers.keccak256(ethers.toUtf8Bytes(seed));
 
@@ -152,7 +153,7 @@ class MarketFactory {
             yesToken,
             noToken,
             status: "OPEN",
-            createdAt: now,
+            createdAt: wallNow,
             marketType: "CUSTOM",
         };
         this.markets.set(questionId, market);
@@ -173,6 +174,15 @@ class MarketFactory {
             const allowance = await this.usdc.allowance(this.operator.address, this.oracle.target);
             if (allowance < BOND) {
                 await this._send((...a) => this.usdc.approve(...a), this.oracle.target, ethers.MaxUint256);
+            }
+
+            const latest = await this.provider.getBlock("latest");
+            const secondsUntilExpiration = market.expiration - Number(latest.timestamp);
+            if (secondsUntilExpiration > 0) {
+                console.log(`MarketFactory: advancing chain ${secondsUntilExpiration + 1}s to market expiration`);
+                await this.provider.send("anvil_increaseTime", [secondsUntilExpiration + 1]);
+                await this.provider.send("anvil_mine", []);
+                await this.nm.resync();
             }
 
             await this._send((...a) => this.oracle.proposeAnswer(...a), questionId, won === "YES" ? 1 : 2, BOND);

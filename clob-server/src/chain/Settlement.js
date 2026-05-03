@@ -1,6 +1,7 @@
 const { ethers }   = require("ethers");
 const TradeRepo    = require("../db/TradeRepository");
 const OrderRepo    = require("../db/OrderRepository");
+const { getNonceManager } = require("./NonceManager");
 
 const EXCHANGE_ABI = [
     "function matchOrders(tuple(uint256 salt,address maker,address signer,address taker,uint256 tokenId,uint256 makerAmount,uint256 takerAmount,uint256 expiration,uint256 nonce,uint256 feeRateBps,uint8 side,uint8 signatureType,bytes signature) makerOrder, tuple(uint256 salt,address maker,address signer,address taker,uint256 tokenId,uint256 makerAmount,uint256 takerAmount,uint256 expiration,uint256 nonce,uint256 feeRateBps,uint8 side,uint8 signatureType,bytes signature) takerOrder, uint256 makerAssetFillAmount, uint256 takerAssetFillAmount)",
@@ -15,6 +16,7 @@ class Settlement {
             this.provider = new ethers.JsonRpcProvider(rpcUrl);
             this.wallet   = new ethers.Wallet(privateKey, this.provider);
             this.exchange = new ethers.Contract(exchangeAddress, EXCHANGE_ABI, this.wallet);
+            this.nm       = getNonceManager(this.provider, this.wallet.address);
             console.log(`Settlement: LIVE mode, operator: ${this.wallet.address}`);
         } else {
             console.log("Settlement: DRY RUN mode");
@@ -48,20 +50,24 @@ class Settlement {
         return Number(makerOrder.makerAmount) / Number(makerOrder.takerAmount);
     }
 
+    async _send(sendTx) {
+        return this.nm.send(sendTx);
+    }
+
     async matchDirect(makerOrder, takerOrder, makerFill, takerFill) {
         if (this.dryRun) {
             console.log("[DRY RUN] matchOrders", makerFill.toString(), takerFill.toString());
             return;
         }
         console.log("Submitting matchOrders on-chain...");
-        const tx = await this.exchange.matchOrders(
+        const { tx, receipt: rc } = await this._send((nonce) => this.exchange.matchOrders(
             this._fmt(makerOrder),
             this._fmt(takerOrder),
             makerFill,
-            takerFill
-        );
+            takerFill,
+            { nonce }
+        ));
         console.log("tx:", tx.hash);
-        const rc = await tx.wait();
         console.log(`matchOrders confirmed (block ${rc.blockNumber}, gas ${rc.gasUsed})`);
 
         // Persist trade
@@ -87,13 +93,13 @@ class Settlement {
             return;
         }
         console.log("Submitting matchComplementaryOrders on-chain...");
-        const tx = await this.exchange.matchComplementaryOrders(
+        const { tx, receipt: rc } = await this._send((nonce) => this.exchange.matchComplementaryOrders(
             this._fmt(yesBidOrder),
             this._fmt(noBidOrder),
-            usdcAmount
-        );
+            usdcAmount,
+            { nonce }
+        ));
         console.log("tx:", tx.hash);
-        const rc = await tx.wait();
         console.log(`matchComplementaryOrders confirmed (block ${rc.blockNumber}, gas ${rc.gasUsed})`);
 
         const size  = usdcAmount.toString();
@@ -117,13 +123,13 @@ class Settlement {
             return;
         }
         console.log("Submitting matchComplementarySellOrders on-chain...");
-        const tx = await this.exchange.matchComplementarySellOrders(
+        const { tx, receipt: rc } = await this._send((nonce) => this.exchange.matchComplementarySellOrders(
             this._fmt(yesSellOrder),
             this._fmt(noSellOrder),
-            tokenAmount
-        );
+            tokenAmount,
+            { nonce }
+        ));
         console.log("tx:", tx.hash);
-        const rc = await tx.wait();
         console.log(`matchComplementarySellOrders confirmed (block ${rc.blockNumber}, gas ${rc.gasUsed})`);
 
         const size  = tokenAmount.toString();

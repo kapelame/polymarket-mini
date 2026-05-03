@@ -133,6 +133,14 @@ export default function MarketPage() {
     const currentMarket = market;
     let cancelled = false;
     async function loadPrices() {
+      if (currentMarket.status !== "OPEN" && currentMarket.result) {
+        const settledYes = currentMarket.result === "YES" ? 1 : 0;
+        if (!cancelled) {
+          setYesPrice(settledYes);
+          setNoPrice(1 - settledYes);
+        }
+        return;
+      }
       try {
         const book = await fetchOrderbook(currentMarket.yesToken);
         const next = book.bids[0] && book.asks[0]

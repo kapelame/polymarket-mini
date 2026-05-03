@@ -9,6 +9,7 @@ const { OracleManager }  = require("./chain/Oracle");
 const { WSServer }       = require("./api/websocket");
 const createRoutes       = require("./api/routes");
 const marketSubmitRoutes = require("./api/marketRoutes");
+const { seedDemoLiquidity } = require("./demo/seedLiquidity");
 
 const PORT          = process.env.PORT         || 3000;
 const RPC_URL       = process.env.RPC_URL       || "http://localhost:8545";
@@ -119,6 +120,22 @@ app.post("/market/create/btc", async (req, res) => {
         books.set(market.yesToken, new (require("./orderbook/OrderBook").OrderBook)(market.yesToken));
         books.set(market.noToken,  new (require("./orderbook/OrderBook").OrderBook)(market.noToken));
         engine.registerPair(market.yesToken, market.noToken);
+
+        if (req.body.seed !== false) {
+            try {
+                market.demoOrderIds = await seedDemoLiquidity(market, books, {
+                    rpcUrl: RPC_URL,
+                    chainId: parseInt(process.env.CHAIN_ID || "31337"),
+                    usdcAddress: USDC_ADDR,
+                    ctfAddress: process.env.CTF_ADDRESS || "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512",
+                    exchangeAddress: EXCHANGE_ADDR,
+                });
+                console.log(`Demo liquidity seeded: ${market.demoOrderIds.length} orders`);
+            } catch (seedErr) {
+                market.demoSeedError = seedErr.message;
+                console.error("Demo liquidity seeding failed:", seedErr.message);
+            }
+        }
 
         console.log(`New market added to engine: ${market.question.slice(0,50)}...`);
         res.json(market);
