@@ -5,6 +5,7 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import WalletButton from "../../../components/WalletButton";
+import AccountPanel from "../../../components/AccountPanel";
 import { CLOB_URL } from "../../../lib/signing";
 import { fetchOrderbook } from "../../../lib/clob";
 
@@ -298,6 +299,7 @@ export default function MarketPage() {
 
         <aside className="detail-rail">
           <OrderForm yesToken={market.yesToken} noToken={market.noToken} question={market.question} />
+          <AccountPanel compact />
         </aside>
       </main>
     </div>

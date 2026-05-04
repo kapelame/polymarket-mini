@@ -69,7 +69,7 @@ class MarketFactory {
         // The UI/demo countdown still uses wallExpiration below.
         const block      = await this.provider.getBlock("latest");
         const chainNow   = Number(block.timestamp);
-        const chainStart = chainNow + 3600;
+        const chainStart = chainNow + 86400;
         const wallNow    = Math.floor(Date.now() / 1000);
         const expiration = chainStart + durationSeconds;
         const btcPrice   = await this.getBtcPrice();
@@ -118,7 +118,7 @@ class MarketFactory {
 
         const block      = await this.provider.getBlock("latest");
         const chainNow   = Number(block.timestamp);
-        const chainStart = chainNow + 3600;
+        const chainStart = chainNow + 86400;
         const wallNow    = Math.floor(Date.now() / 1000);
         const expiration = chainStart + durationSeconds;
         const seed       = `${cleanQuestion}|${wallNow}|${Math.random()}`;

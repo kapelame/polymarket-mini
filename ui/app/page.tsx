@@ -5,6 +5,7 @@ import { useAccount } from "wagmi";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import WalletButton from "../components/WalletButton";
+import AccountPanel from "../components/AccountPanel";
 import { CLOB_URL } from "../lib/signing";
 import { fetchOrderbook } from "../lib/clob";
 
@@ -577,6 +578,8 @@ export default function MarketsPage() {
         </section>
 
         <aside className="pm-aside">
+          <AccountPanel compact />
+
           <section className="side-panel">
             <div className="panel-heading">
               <h2>Breaking</h2>

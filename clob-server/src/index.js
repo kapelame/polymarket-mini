@@ -107,6 +107,9 @@ const factory = new MarketFactory(RPC_URL, OPERATOR_KEY, {
     exchangeAddress: EXCHANGE_ADDR,
     usdcAddress:     USDC_ADDR,
 });
+app.set("marketFactory", factory);
+app.set("engine", engine);
+app.set("books", books);
 
 app.post("/market/create/btc", async (req, res) => {
     try {

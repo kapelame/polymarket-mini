@@ -1,4 +1,4 @@
-import { buildHmacSig, CLOB_URL } from "./signing";
+import { AUTH_DOMAIN, AUTH_MSG, AUTH_TYPES, buildHmacSig, CHAIN_ID, CLOB_URL } from "./signing";
 
 export interface ApiCreds {
   apiKey:     string;
@@ -36,9 +36,96 @@ export interface OpenOrder {
   createdAt?: number;
 }
 
+export interface AccountSummary {
+  totalPnl: number;
+  openPnl: number;
+  settledPnl: number;
+  totalVolume: number;
+  positionValue: number;
+  tradeCount: number;
+  openOrderCount: number;
+  filledOrderCount: number;
+  marketsTraded: number;
+}
+
+export interface AccountPosition {
+  marketId: string | null;
+  question: string;
+  outcome: "YES" | "NO";
+  status: "OPEN" | "SETTLED" | "ERROR";
+  result?: "YES" | "NO" | null;
+  tokenId: string;
+  shares: number;
+  avgPrice: number;
+  currentPrice: number;
+  cost: number;
+  value: number;
+  pnl: number;
+  createdAt?: number;
+}
+
+export interface AccountTrade {
+  tradeId: string;
+  orderId: string;
+  marketId: string | null;
+  question: string;
+  outcome: "YES" | "NO";
+  tokenId: string;
+  side: "BUY" | "SELL";
+  price: number;
+  shares: number;
+  notional: number;
+  pnl: number;
+  status: "OPEN" | "SETTLED" | "ERROR";
+  result?: "YES" | "NO" | null;
+  txHash?: string;
+  createdAt?: number;
+}
+
+export interface AccountOrder {
+  orderId: string;
+  marketId: string | null;
+  question: string;
+  outcome: "YES" | "NO";
+  tokenId: string;
+  side: "BUY" | "SELL";
+  status: "OPEN" | "FILLED" | "CANCELLED" | "PARTIAL";
+  price: number;
+  shares: number;
+  notional: number;
+  filled: number;
+  createdAt?: number;
+}
+
+export interface AccountDashboard {
+  address: string;
+  summary: AccountSummary;
+  positions: AccountPosition[];
+  trades: AccountTrade[];
+  orders: AccountOrder[];
+}
+
+type SignTypedData = (args: any) => Promise<string>;
+
 let _creds: ApiCreds | null = null;
 export function setCreds(c: ApiCreds) { _creds = c; }
 export function getCreds() { return _creds; }
+
+export async function ensureApiCreds(address: string, signTypedDataAsync: SignTypedData): Promise<ApiCreds> {
+  if (getCreds()?.address === address) return getCreds()!;
+  const timestamp = String(Math.floor(Date.now() / 1000));
+  const signature = await signTypedDataAsync({
+    domain: { ...AUTH_DOMAIN, chainId: CHAIN_ID },
+    types: AUTH_TYPES,
+    primaryType: "ClobAuth",
+    message: { address, timestamp, nonce: 0, message: AUTH_MSG },
+  });
+  const creds = await getApiKey(address, timestamp, 0, signature);
+  if (creds.error) throw new Error(creds.error);
+  const enriched = { ...creds, address };
+  setCreds(enriched);
+  return enriched;
+}
 
 export function parseLevels(levels: any[]): OrderLevel[] {
   return (levels || []).map(l => ({
@@ -83,6 +170,14 @@ export async function postOrder(order: object) {
 export async function fetchOpenOrders(address: string): Promise<OpenOrder[]> {
   const headers = await l2Headers("GET", `/orders/${address}`);
   const r = await fetch(`${CLOB_URL}/orders/${address}`, { headers });
+  const data = await r.json();
+  if (data.error) throw new Error(data.error);
+  return data;
+}
+
+export async function fetchAccountDashboard(address: string): Promise<AccountDashboard> {
+  const headers = await l2Headers("GET", `/account/${address}`);
+  const r = await fetch(`${CLOB_URL}/account/${address}`, { headers });
   const data = await r.json();
   if (data.error) throw new Error(data.error);
   return data;

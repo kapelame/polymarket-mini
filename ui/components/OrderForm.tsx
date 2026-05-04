@@ -4,9 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { useAccount, useReadContract, useSignTypedData, useWriteContract } from "wagmi";
 import { formatUnits, maxUint256 } from "viem";
 import {
-  AUTH_DOMAIN,
-  AUTH_MSG,
-  AUTH_TYPES,
   CHAIN_ID,
   CTF_ADDRESS,
   EXCHANGE_ADDRESS,
@@ -15,7 +12,7 @@ import {
   YES_TOKEN,
 } from "../lib/signing";
 import { CTF_ABI, EXCHANGE_ABI, USDC_ABI } from "../lib/contracts";
-import { cancelOrder, fetchOpenOrders, fetchOrderbook, getApiKey, getCreds, postOrder, setCreds, type ApiCreds, type OpenOrder } from "../lib/clob";
+import { cancelOrder, ensureApiCreds, fetchOpenOrders, fetchOrderbook, postOrder, type ApiCreds, type OpenOrder } from "../lib/clob";
 
 type Side = "BUY" | "SELL";
 type Token = "YES" | "NO";
@@ -164,19 +161,7 @@ export default function OrderForm({ yesToken: yesTokenProp, noToken: noTokenProp
 
   async function ensureAuth(): Promise<ApiCreds> {
     if (!address) throw new Error("Connect wallet first");
-    if (getCreds()?.address === address) return getCreds()!;
-    const timestamp = String(Math.floor(Date.now() / 1000));
-    const signature = await signTypedDataAsync({
-      domain: { ...AUTH_DOMAIN, chainId: CHAIN_ID } as any,
-      types: AUTH_TYPES,
-      primaryType: "ClobAuth",
-      message: { address, timestamp, nonce: 0, message: AUTH_MSG },
-    });
-    const creds = await getApiKey(address, timestamp, 0, signature);
-    if (creds.error) throw new Error(creds.error);
-    const enriched = { ...creds, address };
-    setCreds(enriched);
-    return enriched;
+    return ensureApiCreds(address, signTypedDataAsync);
   }
 
   async function loadOpenOrders() {

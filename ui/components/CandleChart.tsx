@@ -39,11 +39,61 @@ export default function CandleChart({ entryPrice, marketResult, height = 300, em
   const [priceDir, setPriceDir] = useState<1|-1>(1);
   const [status,   setStatus]   = useState("Connecting...");
   const [lastTick, setLastTick] = useState(Date.now());
+  const [frameTick, setFrameTick] = useState(0);
   const prevPrice  = useRef<number | null>(null);
+  const targetPrice = useRef<number | null>(null);
+  const animatedPrice = useRef<number | null>(null);
   const dragging   = useRef(false);
   const dragStart  = useRef(0);
   const dragOffset = useRef(0);
   const wsRef      = useRef<WebSocket | null>(null);
+
+  const applyPriceTick = useCallback((nextPrice: number, sourceStatus = "") => {
+    if (!Number.isFinite(nextPrice) || nextPrice <= 0) return;
+    const now = Date.now();
+    const bucketMs = interval === "1h" ? 60 * 60 * 1000 : Number(interval.replace("m", "")) * 60 * 1000;
+    const bucket = Math.floor(now / bucketMs) * bucketMs;
+    if (prevPrice.current !== null) setPriceDir(nextPrice >= prevPrice.current ? 1 : -1);
+    prevPrice.current = nextPrice;
+    targetPrice.current = nextPrice;
+    if (animatedPrice.current === null) animatedPrice.current = nextPrice;
+    setPrice(nextPrice);
+    setStatus(sourceStatus);
+    setLastTick(now);
+    setCandles(prev => {
+      if (!prev.length) {
+        return [{ t: bucket, o: nextPrice, h: nextPrice, l: nextPrice, c: nextPrice, closed: false }];
+      }
+      const last = prev[prev.length - 1];
+      if (bucket > last.t) {
+        return [...prev.slice(-99), { t: bucket, o: last.c, h: Math.max(last.c, nextPrice), l: Math.min(last.c, nextPrice), c: nextPrice, closed: false }];
+      }
+      return [
+        ...prev.slice(0, -1),
+        {
+          ...last,
+          h: Math.max(last.h, nextPrice),
+          l: Math.min(last.l, nextPrice),
+          c: nextPrice,
+          closed: false,
+        },
+      ];
+    });
+  }, [interval]);
+
+  useEffect(() => {
+    let raf = 0;
+    const animate = () => {
+      if (targetPrice.current !== null) {
+        if (animatedPrice.current === null) animatedPrice.current = targetPrice.current;
+        animatedPrice.current += (targetPrice.current - animatedPrice.current) * 0.18;
+        setFrameTick(Date.now());
+      }
+      raf = window.requestAnimationFrame(animate);
+    };
+    raf = window.requestAnimationFrame(animate);
+    return () => window.cancelAnimationFrame(raf);
+  }, []);
 
   // Fetch historical candles from OKX REST
   useEffect(() => {
@@ -61,7 +111,12 @@ export default function CandleChart({ entryPrice, marketResult, height = 300, em
           }));
           setCandles(cs);
           const last = cs[cs.length-1]?.c;
-          if (last) { setPrice(last); prevPrice.current = last; }
+          if (last) {
+            setPrice(last);
+            prevPrice.current = last;
+            targetPrice.current = last;
+            animatedPrice.current = last;
+          }
           setStatus("");
           setLastTick(Date.now());
         }
@@ -80,7 +135,10 @@ export default function CandleChart({ entryPrice, marketResult, height = 300, em
     ws.onopen = () => {
       ws.send(JSON.stringify({
         op: "subscribe",
-        args: [{ channel: "candle" + OKX_BAR[interval], instId: "BTC-USDT" }]
+        args: [
+          { channel: "candle" + OKX_BAR[interval], instId: "BTC-USDT" },
+          { channel: "tickers", instId: "BTC-USDT" },
+        ]
       }));
       setStatus("");
     };
@@ -88,6 +146,10 @@ export default function CandleChart({ entryPrice, marketResult, height = 300, em
     ws.onmessage = (e) => {
       const msg = JSON.parse(e.data);
       if (!msg.data) return;
+      if (msg.arg?.channel === "tickers") {
+        applyPriceTick(Number(msg.data[0]?.last));
+        return;
+      }
       const k = msg.data[0];
       // OKX candle: [ts, o, h, l, c, vol, volCcy, volCcyQuote, confirm]
       const candle: Candle = {
@@ -96,6 +158,8 @@ export default function CandleChart({ entryPrice, marketResult, height = 300, em
       const p = candle.c;
       if (prevPrice.current !== null) setPriceDir(p >= prevPrice.current ? 1 : -1);
       prevPrice.current = p;
+      targetPrice.current = p;
+      if (animatedPrice.current === null) animatedPrice.current = p;
       setPrice(p);
       setLastTick(Date.now());
       setCandles(prev => {
@@ -109,55 +173,25 @@ export default function CandleChart({ entryPrice, marketResult, height = 300, em
     ws.onerror = () => setStatus("WS error");
     ws.onclose = () => {};
     return () => ws.close();
-  }, [interval]);
+  }, [applyPriceTick, interval]);
 
   // REST ticker fallback keeps the current candle moving even when WS is slow
   // or blocked by the browser/network.
   useEffect(() => {
     let cancelled = false;
-    const updateFromPrice = (nextPrice: number, sourceStatus = "") => {
-      if (!Number.isFinite(nextPrice) || nextPrice <= 0 || cancelled) return;
-      const now = Date.now();
-      const bucketMs = interval === "1h" ? 60 * 60 * 1000 : Number(interval.replace("m", "")) * 60 * 1000;
-      const bucket = Math.floor(now / bucketMs) * bucketMs;
-      if (prevPrice.current !== null) setPriceDir(nextPrice >= prevPrice.current ? 1 : -1);
-      prevPrice.current = nextPrice;
-      setPrice(nextPrice);
-      setStatus(sourceStatus);
-      setLastTick(now);
-      setCandles(prev => {
-        if (!prev.length) {
-          return [{ t: bucket, o: nextPrice, h: nextPrice, l: nextPrice, c: nextPrice, closed: false }];
-        }
-        const last = prev[prev.length - 1];
-        if (bucket > last.t) {
-          return [...prev.slice(-99), { t: bucket, o: last.c, h: Math.max(last.c, nextPrice), l: Math.min(last.c, nextPrice), c: nextPrice, closed: false }];
-        }
-        return [
-          ...prev.slice(0, -1),
-          {
-            ...last,
-            h: Math.max(last.h, nextPrice),
-            l: Math.min(last.l, nextPrice),
-            c: nextPrice,
-            closed: false,
-          },
-        ];
-      });
-    };
-
     const poll = async () => {
+      if (cancelled) return;
       try {
         const response = await fetch("https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT", {
           signal: AbortSignal.timeout(2500),
         });
         const data = await response.json();
         const nextPrice = Number(data.data?.[0]?.last);
-        updateFromPrice(nextPrice);
+        if (!cancelled) applyPriceTick(nextPrice);
       } catch {
         const base = prevPrice.current || entryPrice || 79000;
         const wiggle = (Math.random() - 0.5) * Math.max(2, base * 0.00008);
-        updateFromPrice(base + wiggle, "Demo feed");
+        if (!cancelled) applyPriceTick(base + wiggle, "Demo feed");
       }
     };
 
@@ -167,7 +201,7 @@ export default function CandleChart({ entryPrice, marketResult, height = 300, em
       cancelled = true;
       window.clearInterval(id);
     };
-  }, [entryPrice, interval]);
+  }, [applyPriceTick, entryPrice]);
 
   // Draw candles
   useEffect(() => {
@@ -186,8 +220,23 @@ export default function CandleChart({ entryPrice, marketResult, height = 300, em
     const total    = candles.length;
     const start    = Math.max(0, total - visCount - offset);
     const end      = Math.max(0, total - offset);
-    const vis      = candles.slice(start, end);
+    let vis        = candles.slice(start, end);
     if (!vis.length) return;
+    const displayPrice = animatedPrice.current || price;
+    if (displayPrice && offset === 0) {
+      const live = vis[vis.length - 1];
+      vis = [
+        ...vis.slice(0, -1),
+        {
+          ...live,
+          h: Math.max(live.h, displayPrice),
+          l: Math.min(live.l, displayPrice),
+          c: displayPrice,
+          closed: false,
+        },
+      ];
+    }
+    const pulse = (Math.sin(frameTick / 180) + 1) / 2;
 
     let maxP = Math.max(...vis.map(c => c.h));
     let minP = Math.min(...vis.map(c => c.l));
@@ -230,11 +279,17 @@ export default function CandleChart({ entryPrice, marketResult, height = 300, em
       const bull = c.c >= c.o;
       const col  = bull ? "#16c784" : "#ea3943";
       const oY = toY(c.o), cY = toY(c.c), hY = toY(c.h), lY = toY(c.l);
-      ctx.strokeStyle = col; ctx.lineWidth = 1;
+      const live = i === vis.length - 1 && offset === 0;
+      ctx.strokeStyle = col; ctx.lineWidth = live ? 1.5 : 1;
       ctx.beginPath(); ctx.moveTo(x, hY); ctx.lineTo(x, lY); ctx.stroke();
+      if (live) {
+        ctx.fillStyle = bull ? `rgba(22,199,132,${0.08 + pulse * 0.08})` : `rgba(234,57,67,${0.08 + pulse * 0.08})`;
+        ctx.fillRect(x - CW, PAD_T, CW * 2, chartH);
+      }
       ctx.fillStyle = bull ? "rgba(22,199,132,0.85)" : "rgba(234,57,67,0.85)";
       const bTop = Math.min(oY, cY), bH = Math.max(1, Math.abs(cY - oY));
-      ctx.fillRect(x - CW/2, bTop, CW, bH);
+      const width = live ? CW + 2 + pulse * 2 : CW;
+      ctx.fillRect(x - width/2, bTop, width, bH);
     });
 
     // Time axis
@@ -244,20 +299,25 @@ export default function CandleChart({ entryPrice, marketResult, height = 300, em
     vis.forEach((c, i) => { if (i % step === 0) ctx.fillText(fmtTime(c.t, interval), toX(i), H - 8); });
 
     // Current price tag
-    if (price) {
-      const y = toY(price);
+    if (displayPrice) {
+      const y = toY(displayPrice);
       if (y >= PAD_T && y <= PAD_T + chartH) {
-        ctx.strokeStyle = "rgba(255,255,255,0.12)"; ctx.lineWidth = 1; ctx.setLineDash([2, 4]);
+        ctx.strokeStyle = priceDir >= 0 ? `rgba(22,199,132,${0.24 + pulse * 0.2})` : `rgba(234,57,67,${0.24 + pulse * 0.2})`;
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 4]);
         ctx.beginPath(); ctx.moveTo(PAD_L, y); ctx.lineTo(W - PAD_R, y); ctx.stroke();
         ctx.setLineDash([]);
         const tagCol = priceDir >= 0 ? "#16c784" : "#ea3943";
+        ctx.shadowColor = tagCol;
+        ctx.shadowBlur = 8 + pulse * 8;
         ctx.fillStyle = tagCol;
         ctx.fillRect(W - PAD_R - 70, y - 9, 70, 18);
+        ctx.shadowBlur = 0;
         ctx.fillStyle = "#fff"; ctx.font = "bold 10px monospace"; ctx.textAlign = "right";
-        ctx.fillText("$" + fmt(price), W - PAD_R - 3, y + 4);
+        ctx.fillText("$" + fmt(displayPrice), W - PAD_R - 3, y + 4);
       }
     }
-  }, [candles, offset, entryPrice, marketResult, price, priceDir, interval, lastTick]);
+  }, [candles, offset, entryPrice, marketResult, price, priceDir, interval, lastTick, frameTick]);
 
   // Pan handlers
   const onMouseDown = useCallback((e: React.MouseEvent) => {
@@ -285,6 +345,12 @@ export default function CandleChart({ entryPrice, marketResult, height = 300, em
           )}
           {entryPrice && <span style={{ fontSize: 11, color: "var(--amber,#f59e0b)", marginLeft: 4 }}>entry ${fmt(entryPrice)}</span>}
           {status && <span style={{ fontSize: 11, color: "var(--text3)" }}>{status}</span>}
+          {!status && price && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: 5, color: "rgba(255,255,255,0.54)", fontSize: 11 }}>
+              <span style={{ width: 7, height: 7, borderRadius: "50%", background: priceDir >= 0 ? "#16c784" : "#ea3943", boxShadow: `0 0 0 ${3 + Math.round((Math.sin(frameTick / 180) + 1) * 2)}px ${priceDir >= 0 ? "rgba(22,199,132,0.12)" : "rgba(234,57,67,0.12)"}` }} />
+              live {Math.max(0, ((frameTick || Date.now()) - lastTick) / 1000).toFixed(1)}s
+            </span>
+          )}
         </div>
         <div style={{ display: "flex", gap: 3 }}>
           {INTERVALS.map(iv => (

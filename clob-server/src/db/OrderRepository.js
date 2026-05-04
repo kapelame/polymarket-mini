@@ -28,6 +28,26 @@ const getByMaker = db.prepare(`
   ORDER BY created_at DESC LIMIT 50
 `);
 
+const getHistoryByMaker = db.prepare(`
+  SELECT * FROM orders
+  WHERE lower(maker) = lower(@maker)
+  ORDER BY created_at DESC LIMIT @limit
+`);
+
+function inflate(row) {
+  const raw = JSON.parse(row.raw_order);
+  return {
+    ...raw,
+    orderId:   raw.orderId || raw.order_id || row.order_id,
+    tokenId:   raw.tokenId || raw.token_id || row.token_id,
+    status:    row.status,
+    price:     row.price,
+    filled:    row.filled,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
 module.exports = {
   save(order) {
     const price = order.side === "BUY"
@@ -62,11 +82,10 @@ module.exports = {
   },
 
   getByMaker(maker) {
-    return getByMaker.all({ maker }).map(r => ({
-      ...JSON.parse(r.raw_order),
-      status:    r.status,
-      filled:    r.filled,
-      createdAt: r.created_at,
-    }));
+    return getByMaker.all({ maker }).map(inflate);
+  },
+
+  getHistoryByMaker(maker, limit = 100) {
+    return getHistoryByMaker.all({ maker, limit }).map(inflate);
   },
 };
